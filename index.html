@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -12,7 +11,6 @@
   <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1040/1040236.png">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#007bff">
-  <title>배추 생육 및 수확 데이터 입력</title>
   <style>
     body { font-family: sans-serif; padding: 20px; max-width: 500px; margin: 0 auto; background-color: #f8f9fa; }
     .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
@@ -72,10 +70,6 @@
       <div id="fieldSection" class="type-field">
         <div class="section-title">📍 현장 조사 항목</div>
         <div class="form-group">
-          <label for="field_plantHeight">초장 (cm)</label>
-          <input type="number" step="0.1" id="field_plantHeight" class="field-input">
-        </div>
-        <div class="form-group">
           <label for="field_leafLength">엽장 (cm)</label>
           <input type="number" step="0.1" id="field_leafLength" class="field-input">
         </div>
@@ -96,10 +90,6 @@
       <!-- 수확 조사 전용 항목 -->
       <div id="harvestSection" class="type-field">
         <div class="section-title">🌾 수확 조사 항목</div>
-        <div class="form-group">
-          <label for="harvest_plantHeight">초장 (cm)</label>
-          <input type="number" step="0.1" id="harvest_plantHeight" class="harvest-input">
-        </div>
         <div class="form-group">
           <label for="harvest_leafLength">엽장 (cm)</label>
           <input type="number" step="0.1" id="harvest_leafLength" class="harvest-input">
@@ -208,7 +198,6 @@
 
       if (type === '현장') {
         payload.data = {
-          plantHeight: parseFloat(document.getElementById('field_plantHeight').value || 0),
           leafLength: parseFloat(document.getElementById('field_leafLength').value || 0),
           leafWidth: parseFloat(document.getElementById('field_leafWidth').value || 0),
           outerLeaves: parseInt(document.getElementById('field_outerLeaves').value || 0),
@@ -216,7 +205,6 @@
         };
       } else if (type === '수확') {
         payload.data = {
-          plantHeight: parseFloat(document.getElementById('harvest_plantHeight').value || 0),
           leafLength: parseFloat(document.getElementById('harvest_leafLength').value || 0),
           leafWidth: parseFloat(document.getElementById('harvest_leafWidth').value || 0),
           bulbHeight: parseFloat(document.getElementById('harvest_bulbHeight').value || 0),
@@ -246,9 +234,9 @@
         // 입력창 비우기
         document.querySelectorAll('.field-input, .harvest-input').forEach(el => el.value = '');
         
-        // 포커스 이동
-        if (type === '현장') document.getElementById('field_plantHeight').focus();
-        else document.getElementById('harvest_plantHeight').focus();
+        // 데이터 저장 후 첫 번째 입력창(엽장)으로 포커스 이동
+        if (type === '현장') document.getElementById('field_leafLength').focus();
+        else document.getElementById('harvest_leafLength').focus();
 
       } catch (error) {
         console.error("저장 실패:", error);
