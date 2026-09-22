@@ -1,18 +1,20 @@
+
 <!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>농가 생육 및 수확 데이터 입력</title>
+  <title>배추 생육 및 수확 데이터 입력</title>
   <style>
     body { font-family: sans-serif; padding: 20px; max-width: 500px; margin: 0 auto; background-color: #f8f9fa; }
     .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    .form-group { margin-bottom: 15px; }
-    label { display: block; font-weight: bold; margin-bottom: 5px; color: #333; }
+    .form-group { margin-bottom: 12px; }
+    label { display: block; font-weight: bold; margin-bottom: 4px; color: #333; font-size: 14px; }
     input, select, button { width: 100%; padding: 10px; font-size: 16px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
     .type-field { display: none; }
     .type-field.active { display: block; }
     .section-title { font-size: 14px; color: #007bff; font-weight: bold; margin-top: 15px; margin-bottom: 10px; border-bottom: 2px solid #007bff; padding-bottom: 3px; }
+    .plant-badge { background-color: #e7f1ff; color: #004085; padding: 10px; border-radius: 4px; text-align: center; font-weight: bold; margin-bottom: 15px; font-size: 20px; }
     button { background-color: #28a745; color: white; border: none; font-weight: bold; cursor: pointer; margin-top: 15px; }
     button:hover { background-color: #218838; }
   </style>
@@ -20,7 +22,7 @@
 <body>
 
   <div class="card">
-    <h2>🌱 농가 데이터 입력</h2>
+    <h2>🥬 배추 데이터 입력</h2>
     <form id="growthForm">
       
       <!-- 공통 정보 -->
@@ -53,9 +55,18 @@
         </select>
       </div>
 
+      <!-- 현재 조사 중인 배추 번호 표시 (A1~A10, B1~B10, C1~C10) -->
+      <div class="plant-badge">
+        현재 조사 배추: <span id="plantNoDisplay">A1</span>
+      </div>
+
       <!-- 현장 조사 전용 항목 -->
       <div id="fieldSection" class="type-field">
         <div class="section-title">📍 현장 조사 항목</div>
+        <div class="form-group">
+          <label for="field_plantHeight">초장 (cm)</label>
+          <input type="number" step="0.1" id="field_plantHeight" class="field-input">
+        </div>
         <div class="form-group">
           <label for="field_leafLength">엽장 (cm)</label>
           <input type="number" step="0.1" id="field_leafLength" class="field-input">
@@ -77,6 +88,10 @@
       <!-- 수확 조사 전용 항목 -->
       <div id="harvestSection" class="type-field">
         <div class="section-title">🌾 수확 조사 항목</div>
+        <div class="form-group">
+          <label for="harvest_plantHeight">초장 (cm)</label>
+          <input type="number" step="0.1" id="harvest_plantHeight" class="harvest-input">
+        </div>
         <div class="form-group">
           <label for="harvest_leafLength">엽장 (cm)</label>
           <input type="number" step="0.1" id="harvest_leafLength" class="harvest-input">
@@ -111,7 +126,7 @@
         </div>
       </div>
 
-      <button type="submit">데이터 저장하기</button>
+      <button type="submit" id="submitBtn">저장 후 다음 배추</button>
     </form>
   </div>
 
@@ -119,7 +134,6 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    // ✅ 발급받으신 Firebase 설정 적용 완료
     const firebaseConfig = {
       apiKey: "AIzaSyC5O35f1bCuyXZAXkd2g1sGAFRM3SXzwp8",
       authDomain: "sangwook-6d3c2.firebaseapp.com",
@@ -132,6 +146,15 @@
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
+
+    let currentIdx = 1; // 1~30 카운터
+
+    // 1~30 숫자를 A1~A10, B1~B10, C1~C10 라벨로 변환 함수
+    function getPlantLabel(index) {
+      if (index <= 10) return `A${index}`;
+      if (index <= 20) return `B${index - 10}`;
+      return `C${index - 20}`;
+    }
 
     document.getElementById('date').value = new Date().toISOString().substring(0, 10);
 
@@ -164,41 +187,61 @@
         return;
       }
 
+      const plantCode = getPlantLabel(currentIdx);
+
       const payload = {
         team: document.getElementById('team').value,
         farmName: document.getElementById('farmName').value.trim(),
         date: document.getElementById('date').value,
         surveyType: type,
+        plantNo: plantCode, // A1~A10, B1~B10, C1~C10 형태로 저장
         createdAt: serverTimestamp()
       };
 
       if (type === '현장') {
         payload.data = {
-          leafLength: parseFloat(document.getElementById('field_leafLength').value),
-          leafWidth: parseFloat(document.getElementById('field_leafWidth').value),
-          outerLeaves: parseInt(document.getElementById('field_outerLeaves').value),
-          innerLeaves: parseInt(document.getElementById('field_innerLeaves').value)
+          plantHeight: parseFloat(document.getElementById('field_plantHeight').value || 0),
+          leafLength: parseFloat(document.getElementById('field_leafLength').value || 0),
+          leafWidth: parseFloat(document.getElementById('field_leafWidth').value || 0),
+          outerLeaves: parseInt(document.getElementById('field_outerLeaves').value || 0),
+          innerLeaves: parseInt(document.getElementById('field_innerLeaves').value || 0)
         };
       } else if (type === '수확') {
         payload.data = {
-          leafLength: parseFloat(document.getElementById('harvest_leafLength').value),
-          leafWidth: parseFloat(document.getElementById('harvest_leafWidth').value),
-          bulbHeight: parseFloat(document.getElementById('harvest_bulbHeight').value),
-          bulbWidth: parseFloat(document.getElementById('harvest_bulbWidth').value),
-          outerLeaves: parseInt(document.getElementById('harvest_outerLeaves').value),
-          innerLeaves: parseInt(document.getElementById('harvest_innerLeaves').value),
-          plantWeight: parseFloat(document.getElementById('harvest_plantWeight').value),
-          bulbWeight: parseFloat(document.getElementById('harvest_bulbWeight').value)
+          plantHeight: parseFloat(document.getElementById('harvest_plantHeight').value || 0),
+          leafLength: parseFloat(document.getElementById('harvest_leafLength').value || 0),
+          leafWidth: parseFloat(document.getElementById('harvest_leafWidth').value || 0),
+          bulbHeight: parseFloat(document.getElementById('harvest_bulbHeight').value || 0),
+          bulbWidth: parseFloat(document.getElementById('harvest_bulbWidth').value || 0),
+          outerLeaves: parseInt(document.getElementById('harvest_outerLeaves').value || 0),
+          innerLeaves: parseInt(document.getElementById('harvest_innerLeaves').value || 0),
+          plantWeight: parseFloat(document.getElementById('harvest_plantWeight').value || 0),
+          bulbWeight: parseFloat(document.getElementById('harvest_bulbWeight').value || 0)
         };
       }
 
       try {
         await addDoc(collection(db, "farm_growth"), payload);
-        alert(`${type} 데이터가 성공적으로 저장되었습니다!`);
-        document.getElementById('growthForm').reset();
-        document.getElementById('date').value = new Date().toISOString().substring(0, 10);
-        fieldSection.classList.remove('active');
-        harvestSection.classList.remove('active');
+        
+        if (currentIdx >= 30) {
+          alert(`🎉 ${payload.farmName}의 30개 배추(A1~C10) 조사가 완료되었습니다!`);
+          currentIdx = 1;
+          document.getElementById('farmName').value = ''; 
+        } else {
+          currentIdx++;
+        }
+
+        const nextCode = getPlantLabel(currentIdx);
+        document.getElementById('plantNoDisplay').innerText = nextCode;
+        document.getElementById('submitBtn').innerText = currentIdx === 1 ? "저장 후 다음 배추" : "저장 후 다음 배추";
+
+        // 입력창 비우기
+        document.querySelectorAll('.field-input, .harvest-input').forEach(el => el.value = '');
+        
+        // 포커스 이동
+        if (type === '현장') document.getElementById('field_plantHeight').focus();
+        else document.getElementById('harvest_plantHeight').focus();
+
       } catch (error) {
         console.error("저장 실패:", error);
         alert("데이터 저장 중 오류가 발생했습니다.");
