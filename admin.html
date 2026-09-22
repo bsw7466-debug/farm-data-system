@@ -4,13 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>관리자 - 농가 생육 데이터 시각화 대시보드</title>
-
+  
   <!-- 🔵 파란 동그라미 아이콘 및 PWA 설정 -->
   <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/1040/1040236.png">
   <link rel="shortcut icon" href="https://cdn-icons-png.flaticon.com/512/1040/1040236.png">
   <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1040/1040236.png">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#007bff">
+  
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body { font-family: sans-serif; padding: 20px; max-width: 1200px; margin: 0 auto; background-color: #f8f9fa; }
@@ -24,6 +25,21 @@
     th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
     th { background-color: #007bff; color: white; }
     tr:nth-child(even) { background-color: #f9f9f9; }
+    
+    /* 삭제 버튼 스타일 */
+    .delete-btn {
+      background-color: #dc3545;
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: background-color 0.2s;
+    }
+    .delete-btn:hover {
+      background-color: #bd2130;
+    }
   </style>
 </head>
 <body>
@@ -102,7 +118,8 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getFirestore, collection, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    // doc, deleteDoc 함수 추가 불러오기
+    import { getFirestore, collection, onSnapshot, query, orderBy, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyC5O35f1bCuyXZAXkd2g1sGAFRM3SXzwp8",
@@ -183,8 +200,7 @@
         // 1. 조사 유형 필터링
         if (item.surveyType !== selectedType) return false;
 
-        if (!item.date) return false;
-        
+        if (!item.date) return false;        
         const dateObj = new Date(item.date);
         const month = dateObj.getMonth() + 1; // 1~12월
         const day = dateObj.getDate();        // 1~31일
@@ -208,16 +224,19 @@
       tableHeader.innerHTML = '';
       tableBody.innerHTML = '';
 
+      // 삭제/관리 열(<th>관리</th>) 추가
       if (selectedType === '현장') {
         tableHeader.innerHTML = `<tr>
           <th>조사팀</th><th>농가명</th><th>일자</th><th>개체번호</th>
           <th>초장(cm)</th><th>엽장(cm)</th><th>엽폭(cm)</th><th>외엽수</th><th>내엽수</th>
+          <th>관리</th>
         </tr>`;
       } else {
         tableHeader.innerHTML = `<tr>
           <th>조사팀</th><th>농가명</th><th>일자</th><th>개체번호</th>
           <th>초장(cm)</th><th>엽장(cm)</th><th>엽폭(cm)</th><th>구고(cm)</th><th>구폭(cm)</th>
           <th>외엽수</th><th>내엽수</th><th>주중(g)</th><th>구중(g)</th>
+          <th>관리</th>
         </tr>`;
       }
 
@@ -234,14 +253,16 @@
           row += `<td>${d.plantHeight || 0}</td><td>${d.leafLength || 0}</td><td>${d.leafWidth || 0}</td><td>${d.bulbHeight || 0}</td><td>${d.bulbWidth || 0}</td>
                   <td>${d.outerLeaves || 0}</td><td>${d.innerLeaves || 0}</td><td>${d.plantWeight || 0}</td><td>${d.bulbWeight || 0}</td>`;
         }
+        
+        // 삭제 버튼 열 추가 (item.docId 전달)
+        row += `<td><button class="delete-btn" data-id="${item.docId}">삭제</button></td>`;
         row += `</tr>`;
         tableBody.innerHTML += row;
 
         const farmKey = item.farmName || '미지정';
         if (!farmMap[farmKey]) {
           farmMap[farmKey] = { totalHeight: 0, totalLeaves: 0, count: 0 };
-        }
-        
+        }        
         farmMap[farmKey].totalHeight += (Number(d.plantHeight) || 0);
         farmMap[farmKey].totalLeaves += ((Number(d.outerLeaves) || 0) + (Number(d.innerLeaves) || 0));
         farmMap[farmKey].count += 1;
@@ -251,21 +272,41 @@
       const avgHeight = farms.map(f => (farmMap[f].totalHeight / farmMap[f].count).toFixed(1));
       const avgLeaves = farms.map(f => (farmMap[f].totalLeaves / farmMap[f].count).toFixed(1));
 
-      // 분리된 차트 각각 호출
+      // 차트 호출
       renderHeightChart(farms, avgHeight);
       renderLeafChart(farms, avgLeaves);
     }
+
+    // 삭제 버튼 클릭 이벤트 처리
+    document.getElementById('dataTable').addEventListener('click', async (e) => {
+      if (e.target.classList.contains('delete-btn')) {
+        const docId = e.target.getAttribute('data-id');
+        
+        if (confirm("정말로 이 조사 데이터를 삭제하시겠습니까?\n삭제된 데이터는 복구할 수 없습니다.")) {
+          try {
+            await deleteDoc(doc(db, "farm_growth", docId));
+            alert("성공적으로 삭제되었습니다.");
+          } catch (error) {
+            console.error("삭제 실패:", error);
+            alert("삭제에 실패했습니다. 권한을 확인하세요.");
+          }
+        }
+      }
+    });
 
     // 필터 변경 이벤트 리스너 연결
     document.getElementById('viewType').addEventListener('change', updateDashboard);
     document.getElementById('surveyMonth').addEventListener('change', updateDashboard);
     document.getElementById('surveyTenDay').addEventListener('change', updateDashboard);
 
-    // Firebase 실시간 데이터 감지
+    // Firebase 실시간 데이터 감지 (문서 고유 ID 포함 저장)
     const q = query(collection(db, "farm_growth"), orderBy("date", "desc"));
     onSnapshot(q, (snapshot) => {
       rawDataList = [];
-      snapshot.forEach(doc => rawDataList.push(doc.data()));
+      snapshot.forEach(docSnap => {
+        // 데이터 원본과 함께 파이어베이스 문서 고유 ID(docId)를 함께 저장
+        rawDataList.push({ docId: docSnap.id, ...docSnap.data() });
+      });
       updateDashboard(); // 차트 및 표 갱신
     });
   </script>
