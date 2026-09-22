@@ -89,11 +89,11 @@
     </div>
   </div>
 
-  <!-- 1. 초장 비교 그래프 -->
+  <!-- 1. 엽장 비교 그래프 -->
   <div class="card">
-    <div class="chart-title">📏 농가별 평균 초장 비교 (cm)</div>
+    <div class="chart-title">📏 농가별 평균 엽장 비교 (cm)</div>
     <div class="chart-container">
-      <canvas id="heightChart"></canvas>
+      <canvas id="leafLengthChart"></canvas>
     </div>
   </div>
 
@@ -118,7 +118,6 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    // doc, deleteDoc 함수 추가 불러오기
     import { getFirestore, collection, onSnapshot, query, orderBy, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -134,22 +133,22 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    let heightChart = null;
+    let leafLengthChart = null;
     let leafChart = null;
     let rawDataList = [];
 
-    // 초장 차트 그리기
-    function renderHeightChart(labels, heightData) {
-      const ctx = document.getElementById('heightChart').getContext('2d');
-      if (heightChart) heightChart.destroy();
+    // 엽장 차트 그리기
+    function renderLeafLengthChart(labels, lengthData) {
+      const ctx = document.getElementById('leafLengthChart').getContext('2d');
+      if (leafLengthChart) leafLengthChart.destroy();
 
-      heightChart = new Chart(ctx, {
+      leafLengthChart = new Chart(ctx, {
         type: 'bar',
         data: {
           labels: labels,
           datasets: [{
-            label: '평균 초장 (cm)',
-            data: heightData,
+            label: '평균 엽장 (cm)',
+            data: lengthData,
             backgroundColor: 'rgba(54, 162, 235, 0.75)',
             borderColor: 'rgba(54, 162, 235, 1)',
             borderWidth: 1,
@@ -224,17 +223,17 @@
       tableHeader.innerHTML = '';
       tableBody.innerHTML = '';
 
-      // 삭제/관리 열(<th>관리</th>) 추가
+      // 삭제/관리 열(<th>관리</th>) 및 컬럼명 반영
       if (selectedType === '현장') {
         tableHeader.innerHTML = `<tr>
           <th>조사팀</th><th>농가명</th><th>일자</th><th>개체번호</th>
-          <th>초장(cm)</th><th>엽장(cm)</th><th>엽폭(cm)</th><th>외엽수</th><th>내엽수</th>
+          <th>엽장(cm)</th><th>엽폭(cm)</th><th>외엽수</th><th>내엽수</th>
           <th>관리</th>
         </tr>`;
       } else {
         tableHeader.innerHTML = `<tr>
           <th>조사팀</th><th>농가명</th><th>일자</th><th>개체번호</th>
-          <th>초장(cm)</th><th>엽장(cm)</th><th>엽폭(cm)</th><th>구고(cm)</th><th>구폭(cm)</th>
+          <th>엽장(cm)</th><th>엽폭(cm)</th><th>구고(cm)</th><th>구폭(cm)</th>
           <th>외엽수</th><th>내엽수</th><th>주중(g)</th><th>구중(g)</th>
           <th>관리</th>
         </tr>`;
@@ -248,32 +247,32 @@
 
         let row = `<tr><td>${item.team || '-'}</td><td>${item.farmName || '-'}</td><td>${item.date || '-'}</td><td><b>${pNo}</b></td>`;
         if (selectedType === '현장') {
-          row += `<td>${d.plantHeight || 0}</td><td>${d.leafLength || 0}</td><td>${d.leafWidth || 0}</td><td>${d.outerLeaves || 0}</td><td>${d.innerLeaves || 0}</td>`;
+          row += `<td>${d.leafLength || 0}</td><td>${d.leafWidth || 0}</td><td>${d.outerLeaves || 0}</td><td>${d.innerLeaves || 0}</td>`;
         } else {
-          row += `<td>${d.plantHeight || 0}</td><td>${d.leafLength || 0}</td><td>${d.leafWidth || 0}</td><td>${d.bulbHeight || 0}</td><td>${d.bulbWidth || 0}</td>
+          row += `<td>${d.leafLength || 0}</td><td>${d.leafWidth || 0}</td><td>${d.bulbHeight || 0}</td><td>${d.bulbWidth || 0}</td>
                   <td>${d.outerLeaves || 0}</td><td>${d.innerLeaves || 0}</td><td>${d.plantWeight || 0}</td><td>${d.bulbWeight || 0}</td>`;
         }
         
-        // 삭제 버튼 열 추가 (item.docId 전달)
+        // 삭제 버튼 열 추가
         row += `<td><button class="delete-btn" data-id="${item.docId}">삭제</button></td>`;
         row += `</tr>`;
         tableBody.innerHTML += row;
 
         const farmKey = item.farmName || '미지정';
         if (!farmMap[farmKey]) {
-          farmMap[farmKey] = { totalHeight: 0, totalLeaves: 0, count: 0 };
+          farmMap[farmKey] = { totalLeafLength: 0, totalLeaves: 0, count: 0 };
         }        
-        farmMap[farmKey].totalHeight += (Number(d.plantHeight) || 0);
+        farmMap[farmKey].totalLeafLength += (Number(d.leafLength) || 0);
         farmMap[farmKey].totalLeaves += ((Number(d.outerLeaves) || 0) + (Number(d.innerLeaves) || 0));
         farmMap[farmKey].count += 1;
       });
 
       const farms = Object.keys(farmMap);
-      const avgHeight = farms.map(f => (farmMap[f].totalHeight / farmMap[f].count).toFixed(1));
+      const avgLeafLength = farms.map(f => (farmMap[f].totalLeafLength / farmMap[f].count).toFixed(1));
       const avgLeaves = farms.map(f => (farmMap[f].totalLeaves / farmMap[f].count).toFixed(1));
 
       // 차트 호출
-      renderHeightChart(farms, avgHeight);
+      renderLeafLengthChart(farms, avgLeafLength);
       renderLeafChart(farms, avgLeaves);
     }
 
@@ -299,12 +298,11 @@
     document.getElementById('surveyMonth').addEventListener('change', updateDashboard);
     document.getElementById('surveyTenDay').addEventListener('change', updateDashboard);
 
-    // Firebase 실시간 데이터 감지 (문서 고유 ID 포함 저장)
+    // Firebase 실시간 데이터 감지
     const q = query(collection(db, "farm_growth"), orderBy("date", "desc"));
     onSnapshot(q, (snapshot) => {
       rawDataList = [];
       snapshot.forEach(docSnap => {
-        // 데이터 원본과 함께 파이어베이스 문서 고유 ID(docId)를 함께 저장
         rawDataList.push({ docId: docSnap.id, ...docSnap.data() });
       });
       updateDashboard(); // 차트 및 표 갱신
