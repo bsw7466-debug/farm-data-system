@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>관리자 - 농가 생육 데이터 시각화 대시보드</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 20px; max-width: 1000px; margin: 0 auto; background-color: #f8f9fa; }
+    .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
+    .filter-group { display: flex; gap: 15px; align-items: center; margin-bottom: 20px; }
+    select { padding: 8px 12px; font-size: 16px; border-radius: 4px; border: 1px solid #ccc; }
+    .chart-container { width: 100%; height: 350px; margin-bottom: 30px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+    th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
+    th { background-color: #007bff; color: white; }
+    tr:nth-child(even) { background-color: #f2f2f2; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h2>📊 농가 데이터 시각화 대시보드</h2>
+
+    <div class="filter-group">
+      <label for="viewType"><b>조사 유형 선택:</b></label>
+      <select id="viewType">
+        <option value="현장">현장 조사 데이터</option>
+        <option value="수확">수확 조사 데이터</option>
+      </select>
+    </div>
+
+    <div class="chart-container">
+      <canvas id="comparisonChart"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>📋 수집 데이터 상세 목록</h3>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead id="tableHeader"></thead>
+        <tbody id="dataTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, collection, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    // ✅ 발급받으신 Firebase 설정 적용 완료
+    const firebaseConfig = {
+      apiKey: "AIzaSyC5O35f1bCuyXZAXkd2g1sGAFRM3SXzwp8",
+      authDomain: "sangwook-6d3c2.firebaseapp.com",
+      projectId: "sangwook-6d3c2",
+      storageBucket: "sangwook-6d3c2.firebasestorage.app",
+      messagingSenderId: "947126595051",
+      appId: "1:947126595051:web:69bc46f80e581bfe30bdae",
+      measurementId: "G-CKC3MLSQSL"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    let comparisonChart = null;
+    let rawDataList = [];
+
+    function renderChart(labels, dataset1, dataset2, label1, label2) {
+      const ctx = document.getElementById('comparisonChart').getContext('2d');
+      if (comparisonChart) comparisonChart.destroy();
+
+      comparisonChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            { label: label1, data: dataset1, backgroundColor: 'rgba(54, 162, 235, 0.7)' },
+            { label: label2, data: dataset2, backgroundColor: 'rgba(255, 99, 132, 0.7)' }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: { y: { beginAtZero: true } }
+        }
+      });
+    }
+
+    function updateDashboard() {
+      const selectedType = document.getElementById('viewType').value;
+      const filteredData = rawDataList.filter(item => item.surveyType === selectedType);
+
+      const tableHeader = document.getElementById('tableHeader');
+      const tableBody = document.getElementById('dataTable');
+
+      tableHeader.innerHTML = '';
+      tableBody.innerHTML = '';
+
+      if (selectedType === '현장') {
+        tableHeader.innerHTML = `<tr>
+          <th>조사팀</th><th>농가명</th><th>일자</th>
+          <th>엽장(cm)</th><th>엽폭(cm)</th><th>외엽수</th><th>내엽수</th>
+        </tr>`;
+      } else {
+        tableHeader.innerHTML = `<tr>
+          <th>조사팀</th><th>농가명</th><th>일자</th>
+          <th>엽장(cm)</th><th>엽폭(cm)</th><th>구고(cm)</th><th>구폭(cm)</th>
+          <th>외엽수</th><th>내엽수</th><th>주중(g)</th><th>구중(g)</th>
+        </tr>`;
+      }
+
+      const farmMap = {};
+
+      filteredData.forEach(item => {
+        const d = item.data;
+
+        let row = `<tr><td>${item.team}</td><td>${item.farmName}</td><td>${item.date}</td>`;
+        if (selectedType === '현장') {
+          row += `<td>${d.leafLength}</td><td>${d.leafWidth}</td><td>${d.outerLeaves}</td><td>${d.innerLeaves}</td>`;
+        } else {
+          row += `<td>${d.leafLength}</td><td>${d.leafWidth}</td><td>${d.bulbHeight}</td><td>${d.bulbWidth}</td>
+                  <td>${d.outerLeaves}</td><td>${d.innerLeaves}</td><td>${d.plantWeight}</td><td>${d.bulbWeight}</td>`;
+        }
+        row += `</tr>`;
+        tableBody.innerHTML += row;
+
+        if (!farmMap[item.farmName]) {
+          farmMap[item.farmName] = { metric1: 0, metric2: 0, count: 0 };
+        }
+        
+        if (selectedType === '현장') {
+          farmMap[item.farmName].metric1 += d.leafLength;
+          farmMap[item.farmName].metric2 += d.leafWidth;
+        } else {
+          farmMap[item.farmName].metric1 += d.plantWeight;
+          farmMap[item.farmName].metric2 += d.bulbWeight;
+        }
+        farmMap[item.farmName].count += 1;
+      });
+
+      const farms = Object.keys(farmMap);
+      const m1Avg = farms.map(f => (farmMap[f].metric1 / farmMap[f].count).toFixed(1));
+      const m2Avg = farms.map(f => (farmMap[f].metric2 / farmMap[f].count).toFixed(1));
+
+      if (selectedType === '현장') {
+        renderChart(farms, m1Avg, m2Avg, '평균 엽장 (cm)', '평균 엽폭 (cm)');
+      } else {
+        renderChart(farms, m1Avg, m2Avg, '평균 주중 (g)', '평균 구중 (g)');
+      }
+    }
+
+    document.getElementById('viewType').addEventListener('change', updateDashboard);
+
+    const q = query(collection(db, "farm_growth"), orderBy("date", "desc"));
+    onSnapshot(q, (snapshot) => {
+      rawDataList = [];
+      snapshot.forEach(doc => rawDataList.push(doc.data()));
+      updateDashboard();
+    });
+  </script>
+</body>
+</html>
