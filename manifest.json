@@ -1,0 +1,15 @@
+{
+  "name": "배추 생육 조사 앱",
+  "short_name": "배추조사",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#28a745",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/706/706164.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
