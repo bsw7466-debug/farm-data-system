@@ -1,18 +1,23 @@
+```html
 <!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>관리자 - 농가 생육 데이터 시각화 대시보드</title>
-  
+
   <!-- 🔵 파란 동그라미 아이콘 및 PWA 설정 -->
   <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/1040/1040236.png">
   <link rel="shortcut icon" href="https://cdn-icons-png.flaticon.com/512/1040/1040236.png">
   <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1040/1040236.png">
-  <link rel="manifest" href="manifest-admin.json">
+  <link rel="manifest" href="https://bswproject.vercel.app/manifest-admin.json">
   <meta name="theme-color" content="#007bff">
-  
+
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- 막대그래프 위 숫자 표시용 플러그인 -->
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+
   <style>
     body { font-family: sans-serif; padding: 20px; max-width: 1200px; margin: 0 auto; background-color: #f8f9fa; }
     .card { background: white; padding: 24px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); margin-bottom: 25px; }
@@ -25,7 +30,7 @@
     th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
     th { background-color: #007bff; color: white; }
     tr:nth-child(even) { background-color: #f9f9f9; }
-    
+
     /* 삭제 버튼 스타일 */
     .delete-btn {
       background-color: #dc3545;
@@ -37,16 +42,57 @@
       font-size: 12px;
       transition: background-color 0.2s;
     }
+
     .delete-btn:hover {
       background-color: #bd2130;
     }
+
+    /* 수정 버튼 스타일 */
+    .edit-btn {
+      background-color: #007bff;
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      margin-right: 5px;
+      transition: background-color 0.2s;
+    }
+    .edit-btn:hover { background-color: #0056b3; }
+
+    /* 수정 모달 */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; z-index: 9999;
+      background: rgba(0,0,0,.45); align-items: center; justify-content: center;
+      padding: 20px;
+    }
+    .modal-overlay.show { display: flex; }
+    .edit-modal {
+      width: min(720px, 100%); max-height: 90vh; overflow-y: auto;
+      background: #fff; border-radius: 10px; padding: 24px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.2);
+    }
+    .edit-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; }
+    .edit-field { display: flex; flex-direction: column; gap: 6px; text-align: left; }
+    .edit-field label { font-weight: bold; color: #333; }
+    .edit-field input { padding: 9px 10px; border: 1px solid #ccc; border-radius: 5px; font-size: 14px; }
+    .edit-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+    .save-btn, .cancel-btn { border: 0; border-radius: 5px; padding: 9px 16px; cursor: pointer; font-size: 14px; }
+    .save-btn { background: #28a745; color: white; }
+    .cancel-btn { background: #6c757d; color: white; }
+    @media (max-width: 650px) { .edit-grid { grid-template-columns: 1fr; } }
   </style>
 </head>
+
 <body>
+
+<br>
 
   <!-- 필터 카테고리 -->
   <div class="card" style="padding: 15px 24px;">
     <div class="filter-group">
+
       <!-- 1. 조사 유형 선택 -->
       <div class="filter-item">
         <label for="viewType"><b>📋 조사 유형:</b></label>
@@ -55,6 +101,8 @@
           <option value="수확">수확 조사 데이터</option>
         </select>
       </div>
+
+<br>
 
       <!-- 2. 조사 월 선택 -->
       <div class="filter-item">
@@ -76,6 +124,8 @@
         </select>
       </div>
 
+<br>
+
       <!-- 3. 순(상/중/하순) 선택 -->
       <div class="filter-item">
         <label for="surveyTenDay"><b>📆 순 선택:</b></label>
@@ -86,8 +136,11 @@
           <option value="late">하순 (21~말일)</option>
         </select>
       </div>
+
     </div>
   </div>
+
+<br>
 
   <!-- 1. 엽장 비교 그래프 -->
   <div class="card">
@@ -97,6 +150,8 @@
     </div>
   </div>
 
+<br>
+
   <!-- 2. 엽수 비교 그래프 -->
   <div class="card">
     <div class="chart-title">🥬 농가별 평균 총 엽수 비교 (외엽+내엽, 개)</div>
@@ -105,9 +160,12 @@
     </div>
   </div>
 
+<br>
+
   <!-- 상세 데이터 표 -->
   <div class="card">
     <h3>📋 수집 데이터 상세 목록</h3>
+
     <div style="overflow-x:auto;">
       <table>
         <thead id="tableHeader"></thead>
@@ -116,9 +174,24 @@
     </div>
   </div>
 
+<br>
+
+  <!-- 데이터 수정 모달 -->
+  <div id="editModal" class="modal-overlay">
+    <div class="edit-modal">
+      <h3 style="margin-top:0;">✏️ 조사 데이터 수정</h3>
+      <div id="editFields" class="edit-grid"></div>
+      <div class="edit-actions">
+        <button type="button" id="cancelEdit" class="cancel-btn">취소</button>
+        <button type="button" id="saveEdit" class="save-btn">수정 저장</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module">
+
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getFirestore, collection, onSnapshot, query, orderBy, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getFirestore, collection, onSnapshot, query, orderBy, doc, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyC5O35f1bCuyXZAXkd2g1sGAFRM3SXzwp8",
@@ -137,176 +210,686 @@
     let leafChart = null;
     let rawDataList = [];
 
+
+    // ============================================================
     // 엽장 차트 그리기
+    // ============================================================
+
     function renderLeafLengthChart(labels, lengthData) {
-      const ctx = document.getElementById('leafLengthChart').getContext('2d');
-      if (leafLengthChart) leafLengthChart.destroy();
+
+      const ctx = document
+        .getElementById('leafLengthChart')
+        .getContext('2d');
+
+      if (leafLengthChart) {
+        leafLengthChart.destroy();
+      }
 
       leafLengthChart = new Chart(ctx, {
+
         type: 'bar',
+
+        plugins: [ChartDataLabels],
+
         data: {
+
           labels: labels,
+
           datasets: [{
+
             label: '평균 엽장 (cm)',
+
             data: lengthData,
+
             backgroundColor: 'rgba(54, 162, 235, 0.75)',
+
             borderColor: 'rgba(54, 162, 235, 1)',
+
             borderWidth: 1,
+
             barThickness: 40
+
           }]
+
         },
+
         options: {
+
           responsive: true,
+
           maintainAspectRatio: false,
-          scales: { y: { beginAtZero: true } }
+
+          layout: {
+            padding: {
+              top: 25
+            }
+          },
+
+          plugins: {
+
+            datalabels: {
+
+              anchor: 'end',
+
+              align: 'top',
+
+              offset: 3,
+
+              color: '#333',
+
+              font: {
+                weight: 'bold',
+                size: 14
+              },
+
+              formatter: function(value) {
+
+                const num = Number(value);
+
+                if (isNaN(num)) {
+                  return '';
+                }
+
+                return num.toFixed(1);
+
+              }
+
+            }
+
+          },
+
+          scales: {
+
+            y: {
+
+              beginAtZero: true,
+
+              grace: '10%'
+
+            }
+
+          }
+
         }
+
       });
+
     }
 
+
+    // ============================================================
     // 엽수 차트 그리기
+    // ============================================================
+
     function renderLeafChart(labels, leafData) {
-      const ctx = document.getElementById('leafChart').getContext('2d');
-      if (leafChart) leafChart.destroy();
+
+      const ctx = document
+        .getElementById('leafChart')
+        .getContext('2d');
+
+      if (leafChart) {
+        leafChart.destroy();
+      }
 
       leafChart = new Chart(ctx, {
+
         type: 'bar',
+
+        plugins: [ChartDataLabels],
+
         data: {
+
           labels: labels,
+
           datasets: [{
+
             label: '평균 총 엽수 (개)',
+
             data: leafData,
+
             backgroundColor: 'rgba(46, 204, 113, 0.75)',
+
             borderColor: 'rgba(46, 204, 113, 1)',
+
             borderWidth: 1,
+
             barThickness: 40
+
           }]
+
         },
+
         options: {
+
           responsive: true,
+
           maintainAspectRatio: false,
-          scales: { y: { beginAtZero: true } }
+
+          layout: {
+            padding: {
+              top: 25
+            }
+          },
+
+          plugins: {
+
+            datalabels: {
+
+              anchor: 'end',
+
+              align: 'top',
+
+              offset: 3,
+
+              color: '#333',
+
+              font: {
+                weight: 'bold',
+                size: 14
+              },
+
+              formatter: function(value) {
+
+                const num = Number(value);
+
+                if (isNaN(num)) {
+                  return '';
+                }
+
+                return num.toFixed(1);
+
+              }
+
+            }
+
+          },
+
+          scales: {
+
+            y: {
+
+              beginAtZero: true,
+
+              grace: '10%'
+
+            }
+
+          }
+
         }
+
       });
+
     }
 
+
+    // ============================================================
     // 대시보드 필터링 및 업데이트
+    // ============================================================
+
     function updateDashboard() {
-      const selectedType = document.getElementById('viewType').value;
-      const selectedMonth = document.getElementById('surveyMonth').value;
-      const selectedTenDay = document.getElementById('surveyTenDay').value;
+
+      const selectedType =
+        document.getElementById('viewType').value;
+
+      const selectedMonth =
+        document.getElementById('surveyMonth').value;
+
+      const selectedTenDay =
+        document.getElementById('surveyTenDay').value;
+
 
       const filteredData = rawDataList.filter(item => {
+
         // 1. 조사 유형 필터링
-        if (item.surveyType !== selectedType) return false;
-
-        if (!item.date) return false;        
-        const dateObj = new Date(item.date);
-        const month = dateObj.getMonth() + 1; // 1~12월
-        const day = dateObj.getDate();        // 1~31일
-
-        // 2. 월 필터링
-        if (selectedMonth !== 'all' && month !== parseInt(selectedMonth)) {
+        if (item.surveyType !== selectedType) {
           return false;
         }
 
+        if (!item.date) {
+          return false;
+        }
+
+        const dateObj = new Date(item.date);
+
+        const month = dateObj.getMonth() + 1;
+
+        const day = dateObj.getDate();
+
+
+        // 2. 월 필터링
+        if (
+          selectedMonth !== 'all' &&
+          month !== parseInt(selectedMonth)
+        ) {
+
+          return false;
+
+        }
+
+
         // 3. 순(상순/중순/하순) 필터링
-        if (selectedTenDay === 'early' && !(day >= 1 && day <= 10)) return false;
-        if (selectedTenDay === 'mid' && !(day >= 11 && day <= 20)) return false;
-        if (selectedTenDay === 'late' && !(day >= 21)) return false;
+        if (
+          selectedTenDay === 'early' &&
+          !(day >= 1 && day <= 10)
+        ) {
+          return false;
+        }
+
+        if (
+          selectedTenDay === 'mid' &&
+          !(day >= 11 && day <= 20)
+        ) {
+          return false;
+        }
+
+        if (
+          selectedTenDay === 'late' &&
+          !(day >= 21)
+        ) {
+          return false;
+        }
+
 
         return true;
+
       });
 
-      const tableHeader = document.getElementById('tableHeader');
-      const tableBody = document.getElementById('dataTable');
+
+      const tableHeader =
+        document.getElementById('tableHeader');
+
+      const tableBody =
+        document.getElementById('dataTable');
+
 
       tableHeader.innerHTML = '';
+
       tableBody.innerHTML = '';
 
-      // 삭제/관리 열(<th>관리</th>) 및 컬럼명 반영
+
+      // 삭제/관리 열 및 컬럼명 반영
       if (selectedType === '현장') {
+
         tableHeader.innerHTML = `<tr>
-          <th>조사팀</th><th>농가명</th><th>일자</th><th>개체번호</th>
-          <th>엽장(cm)</th><th>엽폭(cm)</th><th>외엽수</th><th>내엽수</th>
+          <th>조사팀</th>
+          <th>농가명</th>
+          <th>일자</th>
+          <th>개체번호</th>
+          <th>엽장(cm)</th>
+          <th>엽폭(cm)</th>
+          <th>외엽수</th>
+          <th>내엽수</th>
           <th>관리</th>
         </tr>`;
+
       } else {
+
         tableHeader.innerHTML = `<tr>
-          <th>조사팀</th><th>농가명</th><th>일자</th><th>개체번호</th>
-          <th>엽장(cm)</th><th>엽폭(cm)</th><th>구고(cm)</th><th>구폭(cm)</th>
-          <th>외엽수</th><th>내엽수</th><th>주중(g)</th><th>구중(g)</th>
+          <th>조사팀</th>
+          <th>농가명</th>
+          <th>일자</th>
+          <th>개체번호</th>
+          <th>엽장(cm)</th>
+          <th>엽폭(cm)</th>
+          <th>구고(cm)</th>
+          <th>구폭(cm)</th>
+          <th>외엽수</th>
+          <th>내엽수</th>
+          <th>주중(g)</th>
+          <th>구중(g)</th>
           <th>관리</th>
         </tr>`;
+
       }
+
 
       const farmMap = {};
 
+
       filteredData.forEach(item => {
+
         const d = item.data || {};
+
         const pNo = item.plantNo || '-';
 
-        let row = `<tr><td>${item.team || '-'}</td><td>${item.farmName || '-'}</td><td>${item.date || '-'}</td><td><b>${pNo}</b></td>`;
+
+        let row =
+          `<tr>
+            <td>${item.team || '-'}</td>
+            <td>${item.farmName || '-'}</td>
+            <td>${item.date || '-'}</td>
+            <td><b>${pNo}</b></td>`;
+
+
         if (selectedType === '현장') {
-          row += `<td>${d.leafLength || 0}</td><td>${d.leafWidth || 0}</td><td>${d.outerLeaves || 0}</td><td>${d.innerLeaves || 0}</td>`;
+
+          row += `
+            <td>${d.leafLength || 0}</td>
+            <td>${d.leafWidth || 0}</td>
+            <td>${d.outerLeaves || 0}</td>
+            <td>${d.innerLeaves || 0}</td>`;
+
         } else {
-          row += `<td>${d.leafLength || 0}</td><td>${d.leafWidth || 0}</td><td>${d.bulbHeight || 0}</td><td>${d.bulbWidth || 0}</td>
-                  <td>${d.outerLeaves || 0}</td><td>${d.innerLeaves || 0}</td><td>${d.plantWeight || 0}</td><td>${d.bulbWeight || 0}</td>`;
+
+          row += `
+            <td>${d.leafLength || 0}</td>
+            <td>${d.leafWidth || 0}</td>
+            <td>${d.bulbHeight || 0}</td>
+            <td>${d.bulbWidth || 0}</td>
+            <td>${d.outerLeaves || 0}</td>
+            <td>${d.innerLeaves || 0}</td>
+            <td>${d.plantWeight || 0}</td>
+            <td>${d.bulbWeight || 0}</td>`;
+
         }
-        
+
+
         // 삭제 버튼 열 추가
-        row += `<td><button class="delete-btn" data-id="${item.docId}">삭제</button></td>`;
+        row += `
+          <td>
+            <button
+              class="edit-btn"
+              data-id="${item.docId}">
+              수정
+            </button>
+            <button
+              class="delete-btn"
+              data-id="${item.docId}">
+              삭제
+            </button>
+          </td>`;
+
+
         row += `</tr>`;
+
+
         tableBody.innerHTML += row;
 
-        const farmKey = item.farmName || '미지정';
+
+        const farmKey =
+          item.farmName || '미지정';
+
+
         if (!farmMap[farmKey]) {
-          farmMap[farmKey] = { totalLeafLength: 0, totalLeaves: 0, count: 0 };
-        }        
-        farmMap[farmKey].totalLeafLength += (Number(d.leafLength) || 0);
-        farmMap[farmKey].totalLeaves += ((Number(d.outerLeaves) || 0) + (Number(d.innerLeaves) || 0));
+
+          farmMap[farmKey] = {
+
+            totalLeafLength: 0,
+
+            totalLeaves: 0,
+
+            count: 0
+
+          };
+
+        }
+
+
+        farmMap[farmKey].totalLeafLength +=
+          (Number(d.leafLength) || 0);
+
+
+        farmMap[farmKey].totalLeaves +=
+          (
+            (Number(d.outerLeaves) || 0) +
+            (Number(d.innerLeaves) || 0)
+          );
+
+
         farmMap[farmKey].count += 1;
+
       });
 
-      const farms = Object.keys(farmMap);
-      const avgLeafLength = farms.map(f => (farmMap[f].totalLeafLength / farmMap[f].count).toFixed(1));
-      const avgLeaves = farms.map(f => (farmMap[f].totalLeaves / farmMap[f].count).toFixed(1));
+
+      const farms =
+        Object.keys(farmMap);
+
+
+      const avgLeafLength =
+        farms.map(f =>
+          (
+            farmMap[f].totalLeafLength /
+            farmMap[f].count
+          ).toFixed(1)
+        );
+
+
+      const avgLeaves =
+        farms.map(f =>
+          (
+            farmMap[f].totalLeaves /
+            farmMap[f].count
+          ).toFixed(1)
+        );
+
 
       // 차트 호출
-      renderLeafLengthChart(farms, avgLeafLength);
-      renderLeafChart(farms, avgLeaves);
+      renderLeafLengthChart(
+        farms,
+        avgLeafLength
+      );
+
+
+      renderLeafChart(
+        farms,
+        avgLeaves
+      );
+
     }
 
-    // 삭제 버튼 클릭 이벤트 처리
-    document.getElementById('dataTable').addEventListener('click', async (e) => {
-      if (e.target.classList.contains('delete-btn')) {
-        const docId = e.target.getAttribute('data-id');
-        
-        if (confirm("정말로 이 조사 데이터를 삭제하시겠습니까?\n삭제된 데이터는 복구할 수 없습니다.")) {
-          try {
-            await deleteDoc(doc(db, "farm_growth", docId));
-            alert("성공적으로 삭제되었습니다.");
-          } catch (error) {
-            console.error("삭제 실패:", error);
-            alert("삭제에 실패했습니다. 권한을 확인하세요.");
-          }
-        }
+
+    // ============================================================
+    // 수정 기능
+    // ============================================================
+    const editModal = document.getElementById('editModal');
+    const editFields = document.getElementById('editFields');
+    let editingDocId = null;
+
+    const commonEditFields = [
+      ['team', '조사팀', 'text'],
+      ['farmName', '농가명', 'text'],
+      ['date', '일자', 'date'],
+      ['plantNo', '개체번호', 'text']
+    ];
+
+    const fieldEditFields = [
+      ['leafLength', '엽장(cm)', 'number'],
+      ['leafWidth', '엽폭(cm)', 'number'],
+      ['outerLeaves', '외엽수', 'number'],
+      ['innerLeaves', '내엽수', 'number']
+    ];
+
+    const harvestExtraFields = [
+      ['bulbHeight', '구고(cm)', 'number'],
+      ['bulbWidth', '구폭(cm)', 'number'],
+      ['plantWeight', '주중(g)', 'number'],
+      ['bulbWeight', '구중(g)', 'number']
+    ];
+
+    function openEditModal(item) {
+      editingDocId = item.docId;
+      const d = item.data || {};
+      const fields = [...commonEditFields, ...fieldEditFields];
+      if (item.surveyType === '수확') fields.push(...harvestExtraFields);
+
+      editFields.innerHTML = fields.map(([key, label, type]) => {
+        const value = commonEditFields.some(f => f[0] === key) ? (item[key] ?? '') : (d[key] ?? '');
+        const step = type === 'number' ? ' step="any"' : '';
+        return `<div class="edit-field">
+          <label for="edit_${key}">${label}</label>
+          <input id="edit_${key}" data-key="${key}" data-scope="${commonEditFields.some(f => f[0] === key) ? 'root' : 'data'}" type="${type}" value="${String(value).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}"${step}>
+        </div>`;
+      }).join('');
+
+      editModal.classList.add('show');
+    }
+
+    function closeEditModal() {
+      editModal.classList.remove('show');
+      editingDocId = null;
+      editFields.innerHTML = '';
+    }
+
+    document.getElementById('cancelEdit').addEventListener('click', closeEditModal);
+    editModal.addEventListener('click', (e) => { if (e.target === editModal) closeEditModal(); });
+
+    document.getElementById('saveEdit').addEventListener('click', async () => {
+      if (!editingDocId) return;
+      const rootUpdates = {};
+      const dataUpdates = {};
+
+      editFields.querySelectorAll('input').forEach(input => {
+        const key = input.dataset.key;
+        let value = input.value.trim();
+        if (input.type === 'number') value = value === '' ? '' : Number(value);
+        if (input.dataset.scope === 'root') rootUpdates[key] = value;
+        else dataUpdates[`data.${key}`] = value;
+      });
+
+      try {
+        await updateDoc(doc(db, 'farm_growth', editingDocId), { ...rootUpdates, ...dataUpdates });
+        alert('성공적으로 수정되었습니다.');
+        closeEditModal();
+      } catch (error) {
+        console.error('수정 실패:', error);
+        alert('수정에 실패했습니다. 권한을 확인하세요.');
       }
     });
 
-    // 필터 변경 이벤트 리스너 연결
-    document.getElementById('viewType').addEventListener('change', updateDashboard);
-    document.getElementById('surveyMonth').addEventListener('change', updateDashboard);
-    document.getElementById('surveyTenDay').addEventListener('change', updateDashboard);
+    // ============================================================
+    // 수정/삭제 버튼 클릭 이벤트 처리
+    // ============================================================
 
-    // Firebase 실시간 데이터 감지
-    const q = query(collection(db, "farm_growth"), orderBy("date", "desc"));
-    onSnapshot(q, (snapshot) => {
-      rawDataList = [];
-      snapshot.forEach(docSnap => {
-        rawDataList.push({ docId: docSnap.id, ...docSnap.data() });
+    document
+      .getElementById('dataTable')
+      .addEventListener('click', async (e) => {
+
+        if (e.target.classList.contains('edit-btn')) {
+          const docId = e.target.getAttribute('data-id');
+          const item = rawDataList.find(row => row.docId === docId);
+          if (item) openEditModal(item);
+          return;
+        }
+
+        if (
+          e.target.classList.contains('delete-btn')
+        ) {
+
+          const docId =
+            e.target.getAttribute('data-id');
+
+
+          if (
+            confirm(
+              "정말로 이 조사 데이터를 삭제하시겠습니까?\n삭제된 데이터는 복구할 수 없습니다."
+            )
+          ) {
+
+            try {
+
+              await deleteDoc(
+                doc(
+                  db,
+                  "farm_growth",
+                  docId
+                )
+              );
+
+
+              alert(
+                "성공적으로 삭제되었습니다."
+              );
+
+            } catch (error) {
+
+              console.error(
+                "삭제 실패:",
+                error
+              );
+
+
+              alert(
+                "삭제에 실패했습니다. 권한을 확인하세요."
+              );
+
+            }
+
+          }
+
+        }
+
       });
-      updateDashboard(); // 차트 및 표 갱신
+
+
+    // ============================================================
+    // 필터 변경 이벤트 리스너 연결
+    // ============================================================
+
+    document
+      .getElementById('viewType')
+      .addEventListener(
+        'change',
+        updateDashboard
+      );
+
+
+    document
+      .getElementById('surveyMonth')
+      .addEventListener(
+        'change',
+        updateDashboard
+      );
+
+
+    document
+      .getElementById('surveyTenDay')
+      .addEventListener(
+        'change',
+        updateDashboard
+      );
+
+
+    // ============================================================
+    // Firebase 실시간 데이터 감지
+    // ============================================================
+
+    const q = query(
+      collection(
+        db,
+        "farm_growth"
+      ),
+      orderBy(
+        "date",
+        "desc"
+      )
+    );
+
+
+    onSnapshot(q, (snapshot) => {
+
+      rawDataList = [];
+
+
+      snapshot.forEach(docSnap => {
+
+        rawDataList.push({
+
+          docId: docSnap.id,
+
+          ...docSnap.data()
+
+        });
+
+      });
+
+
+      updateDashboard();
+
     });
+
   </script>
+
 </body>
 </html>
+```
