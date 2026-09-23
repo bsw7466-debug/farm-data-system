@@ -1,4 +1,4 @@
-```html
+
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -17,6 +17,8 @@
 
   <!-- 막대그래프 위 숫자 표시용 플러그인 -->
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+  <!-- 엑셀(.xlsx) 다운로드용 -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
   <style>
     body { font-family: sans-serif; padding: 20px; max-width: 1200px; margin: 0 auto; background-color: #f8f9fa; }
@@ -81,6 +83,10 @@
     .save-btn, .cancel-btn { border: 0; border-radius: 5px; padding: 9px 16px; cursor: pointer; font-size: 14px; }
     .save-btn { background: #28a745; color: white; }
     .cancel-btn { background: #6c757d; color: white; }
+    .excel-download-area { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin: 0 0 15px; }
+    .excel-download-area select { min-width: 180px; }
+    .excel-btn { background:#198754; color:#fff; border:0; padding:9px 14px; border-radius:5px; cursor:pointer; font-size:14px; font-weight:bold; }
+    .excel-btn:hover { background:#157347; }
     @media (max-width: 650px) { .edit-grid { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -166,6 +172,14 @@
   <div class="card">
     <h3>📋 수집 데이터 상세 목록</h3>
 
+    <div class="excel-download-area">
+      <label for="excelFarm"><b>📥 농가별 엑셀:</b></label>
+      <select id="excelFarm">
+        <option value="all">전체 농가</option>
+      </select>
+      <button type="button" id="downloadExcel" class="excel-btn">엑셀 다운로드</button>
+    </div>
+
     <div style="overflow-x:auto;">
       <table>
         <thead id="tableHeader"></thead>
@@ -209,6 +223,7 @@
     let leafLengthChart = null;
     let leafChart = null;
     let rawDataList = [];
+    let currentFilteredData = [];
 
 
     // ============================================================
@@ -496,6 +511,32 @@
       });
 
 
+      // 농가명 → 개체번호 순으로 자연 정렬 (예: A, B, C / 1, 2, 10)
+      const naturalCollator = new Intl.Collator('ko', {
+        numeric: true,
+        sensitivity: 'base'
+      });
+
+      filteredData.sort((a, b) => {
+        const farmCompare = naturalCollator.compare(
+          String(a.farmName || '미지정'),
+          String(b.farmName || '미지정')
+        );
+        if (farmCompare !== 0) return farmCompare;
+
+        const plantCompare = naturalCollator.compare(
+          String(a.plantNo || ''),
+          String(b.plantNo || '')
+        );
+        if (plantCompare !== 0) return plantCompare;
+
+        // 같은 농가·같은 개체번호라면 날짜순으로 정렬
+        return String(a.date || '').localeCompare(String(b.date || ''));
+      });
+
+      currentFilteredData = filteredData;
+      updateExcelFarmOptions(filteredData);
+
       const tableHeader =
         document.getElementById('tableHeader');
 
@@ -677,6 +718,94 @@
       );
 
     }
+
+
+    // ============================================================
+    // 농가별 엑셀 다운로드
+    // ============================================================
+    function updateExcelFarmOptions(data) {
+      const select = document.getElementById('excelFarm');
+      const previous = select.value;
+      const farms = [...new Set(data.map(item => item.farmName || '미지정'))].sort((a,b) => a.localeCompare(b, 'ko'));
+      select.innerHTML = '<option value="all">전체 농가</option>' +
+        farms.map(f => `<option value="${String(f).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}">${f}</option>`).join('');
+      if (farms.includes(previous)) select.value = previous;
+    }
+
+    function safeFileName(name) {
+      return String(name || '농가').replace(/[\/:*?"<>|]/g, '_');
+    }
+
+    document.getElementById('downloadExcel').addEventListener('click', () => {
+      if (typeof XLSX === 'undefined') {
+        alert('엑셀 다운로드 모듈을 불러오지 못했습니다. 인터넷 연결을 확인하세요.');
+        return;
+      }
+
+      const selectedFarm = document.getElementById('excelFarm').value;
+      const selectedType = document.getElementById('viewType').value;
+      const exportData = selectedFarm === 'all'
+        ? currentFilteredData
+        : currentFilteredData.filter(item => (item.farmName || '미지정') === selectedFarm);
+
+      if (!exportData.length) {
+        alert('다운로드할 데이터가 없습니다.');
+        return;
+      }
+
+      // 엑셀도 화면과 동일하게 농가명 → 개체번호 → 날짜 순으로 정렬
+      const naturalCollator = new Intl.Collator('ko', {
+        numeric: true,
+        sensitivity: 'base'
+      });
+      const sortedExportData = [...exportData].sort((a, b) => {
+        const farmCompare = naturalCollator.compare(
+          String(a.farmName || '미지정'),
+          String(b.farmName || '미지정')
+        );
+        if (farmCompare !== 0) return farmCompare;
+
+        const plantCompare = naturalCollator.compare(
+          String(a.plantNo || ''),
+          String(b.plantNo || '')
+        );
+        if (plantCompare !== 0) return plantCompare;
+
+        return String(a.date || '').localeCompare(String(b.date || ''));
+      });
+
+      const rows = sortedExportData.map(item => {
+        const d = item.data || {};
+        const base = {
+          '조사팀': item.team || '',
+          '농가명': item.farmName || '',
+          '일자': item.date || '',
+          '개체번호': item.plantNo || '',
+          '엽장(cm)': Number(d.leafLength) || 0,
+          '엽폭(cm)': Number(d.leafWidth) || 0,
+          '외엽수': Number(d.outerLeaves) || 0,
+          '내엽수': Number(d.innerLeaves) || 0
+        };
+        if (selectedType === '수확') {
+          base['구고(cm)'] = Number(d.bulbHeight) || 0;
+          base['구폭(cm)'] = Number(d.bulbWidth) || 0;
+          base['주중(g)'] = Number(d.plantWeight) || 0;
+          base['구중(g)'] = Number(d.bulbWeight) || 0;
+        }
+        return base;
+      });
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+      ws['!cols'] = Object.keys(rows[0]).map(key => ({ wch: Math.max(12, key.length + 4) }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, selectedType === '수확' ? '수확조사' : '현장조사');
+
+      const monthText = document.getElementById('surveyMonth').selectedOptions[0].textContent.replace(/\s/g,'');
+      const tenDayText = document.getElementById('surveyTenDay').selectedOptions[0].textContent.split(' ')[0];
+      const farmText = selectedFarm === 'all' ? '전체농가' : selectedFarm;
+      const filename = `${safeFileName(farmText)}_${selectedType}조사_${safeFileName(monthText)}_${safeFileName(tenDayText)}.xlsx`;
+      XLSX.writeFile(wb, filename);
+    });
 
 
     // ============================================================
@@ -890,6 +1019,11 @@
 
   </script>
 
+
+  <footer style="text-align:center; color:#6c757d; font-size:13px; padding:10px 0 25px;">
+    Copyright@박상욱
+<br>bsw7466@jares.go.kr
+  </footer>
+
 </body>
 </html>
-```
