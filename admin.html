@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -87,6 +88,16 @@
     .excel-download-area select { min-width: 180px; }
     .excel-btn { background:#198754; color:#fff; border:0; padding:9px 14px; border-radius:5px; cursor:pointer; font-size:14px; font-weight:bold; }
     .excel-btn:hover { background:#157347; }
+
+    /* 전년 비교 영역 */
+    .compare-card { border-top: 4px solid #0d6efd; }
+    .compare-controls { display:flex; gap:14px; align-items:center; flex-wrap:wrap; margin-bottom:16px; }
+    .compare-controls select { min-width:160px; }
+    .compare-summary { display:grid; grid-template-columns:repeat(auto-fit,minmax(125px,1fr)); gap:8px; margin:12px 0 18px; }
+    .compare-chip { background:#f8f9fa; border:1px solid #dee2e6; border-radius:7px; padding:9px 8px; text-align:center; font-size:13px; }
+    .compare-chip strong { display:block; margin-top:4px; font-size:15px; }
+    .compare-note { color:#6c757d; font-size:13px; margin:8px 0 0; line-height:1.5; }
+    .compare-chart-container { width:100%; height:430px; position:relative; }
     @media (max-width: 650px) { .edit-grid { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -168,6 +179,27 @@
 
 <br>
 
+  <!-- 전년도 비교 그래프 -->
+  <div class="card compare-card">
+    <div class="chart-title">📈 2025년 ↔ 2026년 생육 추이 비교</div>
+    <div class="compare-controls">
+      <div class="filter-item">
+        <label for="compareFarm"><b>🌱 비교 농가:</b></label>
+        <select id="compareFarm"><option value="최윤흥">최윤흥</option></select>
+      </div>
+      <div class="filter-item">
+        <label for="compareMetric"><b>📊 비교 항목:</b></label>
+        <select id="compareMetric">
+          <option value="leafLength">평균 엽장(cm)</option>
+          <option value="totalLeaves">평균 총 엽수(개)</option>
+        </select>
+      </div>
+    </div>
+    <div class="compare-chart-container"><canvas id="yearCompareChart"></canvas></div>
+    <div id="compareSummary" class="compare-summary"></div>
+    <div class="compare-note">※ 조사일을 자동으로 상순(1~10일)·중순(11~20일)·하순(21일~말일)으로 묶어 평균을 비교합니다. 전년 대비 = (2026 - 2025) ÷ 2025 × 100.</div>
+  </div>
+
   <!-- 상세 데이터 표 -->
   <div class="card">
     <h3>📋 수집 데이터 상세 목록</h3>
@@ -224,6 +256,34 @@
     let leafChart = null;
     let rawDataList = [];
     let currentFilteredData = [];
+    let yearCompareChart = null;
+
+    // 2025년 최윤흥 농가 엑셀 원자료를 상·중·하순별 평균으로 집계한 기준값
+    // 엽수는 2025 엑셀의 '엽수'(총엽수)를 사용하고, 2026은 외엽수+내엽수로 계산
+    const previousYearBaseline = {
+      '최윤흥': {
+        '9-late':  { leafLength: 18.77, totalLeaves: 11.80 },
+        '10-early':{ leafLength: 29.50, totalLeaves: 15.70 },
+        '10-mid':  { leafLength: 35.33, totalLeaves: 14.30 },
+        '10-late': { leafLength: 36.77, totalLeaves: 13.97 },
+        '11-early':{ leafLength: 36.83, totalLeaves: 11.47 },
+        '11-mid':  { leafLength: 37.53, totalLeaves: 11.13 },
+        '11-late': { leafLength: 36.13, totalLeaves: 11.47 }
+      }
+    };
+
+    const comparePeriods = [
+      { key:'9-late', label:'9월 하순' },
+      { key:'10-early', label:'10월 상순' },
+      { key:'10-mid', label:'10월 중순' },
+      { key:'10-late', label:'10월 하순' },
+      { key:'11-early', label:'11월 상순' },
+      { key:'11-mid', label:'11월 중순' },
+      { key:'11-late', label:'11월 하순' },
+      { key:'12-early', label:'12월 상순' },
+      { key:'12-mid', label:'12월 중순' },
+      { key:'12-late', label:'12월 하순' }
+    ];
 
 
     // ============================================================
@@ -437,6 +497,114 @@
 
     }
 
+
+    // ============================================================
+    // 2025 ↔ 2026 상·중·하순 비교
+    // ============================================================
+    function getPeriodKey(dateText) {
+      if (!dateText) return null;
+      const parts = String(dateText).split('-').map(Number);
+      if (parts.length < 3 || parts.some(Number.isNaN)) return null;
+      const month = parts[1];
+      const day = parts[2];
+      const ten = day <= 10 ? 'early' : (day <= 20 ? 'mid' : 'late');
+      return `${month}-${ten}`;
+    }
+
+    function getYearFromDate(dateText) {
+      const y = Number(String(dateText || '').slice(0,4));
+      return Number.isFinite(y) ? y : null;
+    }
+
+    function average(values) {
+      const nums = values.filter(v => Number.isFinite(v));
+      return nums.length ? nums.reduce((a,b)=>a+b,0) / nums.length : null;
+    }
+
+    function renderYearComparison() {
+      const farm = document.getElementById('compareFarm').value;
+      const metric = document.getElementById('compareMetric').value;
+      const baseline = previousYearBaseline[farm] || {};
+
+      const grouped2026 = {};
+      comparePeriods.forEach(p => grouped2026[p.key] = []);
+
+      rawDataList.forEach(item => {
+        if (item.surveyType !== '현장') return;
+        if ((item.farmName || '') !== farm) return;
+        if (getYearFromDate(item.date) !== 2026) return;
+        const key = getPeriodKey(item.date);
+        if (!grouped2026[key]) return;
+        const d = item.data || {};
+        const value = metric === 'leafLength'
+          ? Number(d.leafLength)
+          : (Number(d.outerLeaves) || 0) + (Number(d.innerLeaves) || 0);
+        if (Number.isFinite(value) && value > 0) grouped2026[key].push(value);
+      });
+
+      const labels = comparePeriods.map(p => p.label);
+      const data2025 = comparePeriods.map(p => baseline[p.key]?.[metric] ?? null);
+      const data2026 = comparePeriods.map(p => average(grouped2026[p.key]));
+
+      const ctx = document.getElementById('yearCompareChart').getContext('2d');
+      if (yearCompareChart) yearCompareChart.destroy();
+      yearCompareChart = new Chart(ctx, {
+        type: 'line',
+        plugins: [ChartDataLabels],
+        data: {
+          labels,
+          datasets: [
+            { label:'2025년', data:data2025, borderColor:'rgba(108,117,125,1)', backgroundColor:'rgba(108,117,125,.15)', borderWidth:3, pointRadius:5, tension:.2, spanGaps:false },
+            { label:'2026년', data:data2026, borderColor:'rgba(0,123,255,1)', backgroundColor:'rgba(0,123,255,.15)', borderWidth:3, pointRadius:5, tension:.2, spanGaps:false }
+          ]
+        },
+        options: {
+          responsive:true, maintainAspectRatio:false,
+          interaction:{ mode:'index', intersect:false },
+          plugins:{
+            legend:{ position:'bottom' },
+            datalabels:{
+              align:'top', anchor:'end', offset:3, color:'#333',
+              font:{weight:'bold',size:11},
+              formatter:(value,ctx) => {
+                if (value == null) return '';
+                if (ctx.datasetIndex === 0) return Number(value).toFixed(1);
+                const prev = data2025[ctx.dataIndex];
+                if (prev == null || prev === 0) return Number(value).toFixed(1);
+                const pct = ((value-prev)/prev)*100;
+                return `${Number(value).toFixed(1)}\n(${pct>=0?'+':''}${pct.toFixed(1)}%)`;
+              }
+            }
+          },
+          scales:{ y:{ beginAtZero:true, grace:'15%' } }
+        }
+      });
+
+      const summary = document.getElementById('compareSummary');
+      summary.innerHTML = comparePeriods.map((p,i) => {
+        const oldV=data2025[i], newV=data2026[i];
+        if (oldV == null && newV == null) return '';
+        let text='비교자료 없음';
+        if (oldV != null && newV != null && oldV !== 0) {
+          const pct=((newV-oldV)/oldV)*100;
+          text=`${pct>=0?'+':''}${pct.toFixed(1)}%`;
+        } else if (oldV != null && newV == null) text='2026 자료 없음';
+        else if (oldV == null && newV != null) text='2025 자료 없음';
+        return `<div class="compare-chip">${p.label}<strong>${text}</strong></div>`;
+      }).join('');
+    }
+
+    function updateCompareFarmOptions() {
+      const select=document.getElementById('compareFarm');
+      const current=select.value;
+      const farms=[...new Set([
+        ...Object.keys(previousYearBaseline),
+        ...rawDataList.filter(x=>getYearFromDate(x.date)===2026).map(x=>x.farmName).filter(Boolean)
+      ])].sort((a,b)=>a.localeCompare(b,'ko'));
+      select.innerHTML=farms.map(f=>`<option value="${String(f).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}">${f}</option>`).join('');
+      if (farms.includes(current)) select.value=current;
+      else if (farms.includes('최윤흥')) select.value='최윤흥';
+    }
 
     // ============================================================
     // 대시보드 필터링 및 업데이트
@@ -979,6 +1147,9 @@
       );
 
 
+    document.getElementById('compareFarm').addEventListener('change', renderYearComparison);
+    document.getElementById('compareMetric').addEventListener('change', renderYearComparison);
+
     // ============================================================
     // Firebase 실시간 데이터 감지
     // ============================================================
@@ -1013,7 +1184,9 @@
       });
 
 
+      updateCompareFarmOptions();
       updateDashboard();
+      renderYearComparison();
 
     });
 
