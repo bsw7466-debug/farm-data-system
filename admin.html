@@ -1,5 +1,4 @@
 
-
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -99,10 +98,44 @@
     .compare-note { color:#6c757d; font-size:13px; margin:8px 0 0; line-height:1.5; }
     .compare-chart-container { width:100%; height:430px; position:relative; }
     @media (max-width: 650px) { .edit-grid { grid-template-columns: 1fr; } }
+  
+    /* ===== 2026 UI Refresh: 배추 생육 데이터 플랫폼 ===== */
+    :root { --green:#246b45; --green2:#3b8a5f; --ink:#17251d; --muted:#6f7d74; --line:#e4ebe6; --bg:#f4f7f5; }
+    * { box-sizing:border-box; }
+    body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif; padding:0 24px 40px; max-width:1440px; background:var(--bg); color:var(--ink); }
+    body::before { content:""; display:block; height:8px; background:linear-gradient(90deg,var(--green),#7eb78f); margin:0 -24px 26px; }
+    .dashboard-hero { background:linear-gradient(135deg,#174d32,#327a52); color:#fff; border-radius:20px; padding:28px 32px; margin-bottom:22px; box-shadow:0 12px 30px rgba(23,77,50,.16); }
+    .dashboard-hero .eyebrow { font-size:13px; opacity:.78; letter-spacing:.08em; font-weight:700; }
+    .dashboard-hero h1 { margin:6px 0 7px; font-size:28px; letter-spacing:-.04em; }
+    .dashboard-hero p { margin:0; opacity:.86; font-size:14px; }
+    .card { border:1px solid var(--line); border-radius:16px; box-shadow:0 5px 18px rgba(24,55,37,.055); margin-bottom:20px; }
+    .filter-group { gap:12px; }
+    .filter-item { background:#f7faf8; border:1px solid var(--line); border-radius:12px; padding:9px 12px; }
+    select { border:0; border-left:1px solid #dde6e0; border-radius:0; background:transparent; outline:none; font-size:14px; color:#24362a; }
+    .chart-title { font-size:17px; color:#203429; }
+    .compare-card { border-top:0; position:relative; overflow:hidden; }
+    .compare-card::before { content:""; position:absolute; left:0; top:0; bottom:0; width:5px; background:var(--green2); }
+    .compare-chip { background:#f5f9f6; border-color:#dce9e0; border-radius:10px; }
+    th { background:#245f40; }
+    th,td { border-color:#e3e9e5; }
+    tr:nth-child(even) { background:#f7faf8; }
+    tr:hover { background:#eef6f1; }
+    .excel-btn,.save-btn { background:var(--green); border-radius:9px; }
+    .excel-btn:hover,.save-btn:hover { background:#194f33; }
+    .edit-btn { background:#477a60; border-radius:7px; }
+    .delete-btn { border-radius:7px; }
+    .section-kicker { color:var(--green); font-size:12px; font-weight:800; letter-spacing:.08em; margin-bottom:5px; }
+    @media (max-width:650px){ body{padding:0 12px 28px} body::before{margin:0 -12px 16px}.dashboard-hero{padding:22px 20px;border-radius:15px}.dashboard-hero h1{font-size:23px}.filter-item{width:100%;justify-content:space-between}.filter-item select{flex:1}.chart-container,.compare-chart-container{height:340px} }
+
   </style>
 </head>
 
 <body>
+  <header class="dashboard-hero">
+    <div class="eyebrow">CABBAGE GROWTH DATA · ADMIN</div>
+    <h1>배추 생육 데이터 대시보드</h1>
+    <p>농가별 생육조사 · 수확조사 · 전년도 비교 데이터를 한 화면에서 확인합니다.</p>
+  </header>
 
 <br>
 
@@ -161,7 +194,7 @@
 
   <!-- 1. 엽장 비교 그래프 -->
   <div class="card">
-    <div class="chart-title">📏 농가별 평균 엽장 비교 (cm)</div>
+    <div class="chart-title"><span><span class="section-kicker">GROWTH ANALYSIS</span><br>농가별 평균 엽장 비교 (cm)</span></div>
     <div class="chart-container">
       <canvas id="leafLengthChart"></canvas>
     </div>
@@ -171,7 +204,7 @@
 
   <!-- 2. 엽수 비교 그래프 -->
   <div class="card">
-    <div class="chart-title">🥬 농가별 평균 총 엽수 비교 (외엽+내엽, 개)</div>
+    <div class="chart-title"><span><span class="section-kicker">LEAF ANALYSIS</span><br>농가별 평균 총 엽수 비교 (외엽+내엽, 개)</span></div>
     <div class="chart-container">
       <canvas id="leafChart"></canvas>
     </div>
@@ -181,7 +214,7 @@
 
   <!-- 전년도 비교 그래프 -->
   <div class="card compare-card">
-    <div class="chart-title">📈 2025년 ↔ 2026년 생육 추이 비교</div>
+    <div class="chart-title"><span><span class="section-kicker">YEAR COMPARISON</span><br>2025년 ↔ 2026년 생육 추이 비교</span></div>
     <div class="compare-controls">
       <div class="filter-item">
         <label for="compareFarm"><b>🌱 비교 농가:</b></label>
@@ -202,7 +235,7 @@
 
   <!-- 상세 데이터 표 -->
   <div class="card">
-    <h3>📋 수집 데이터 상세 목록</h3>
+    <div class="section-kicker">RAW DATA</div><h3 style="margin-top:4px;">수집 데이터 상세 목록</h3>
 
     <div class="excel-download-area">
       <label for="excelFarm"><b>📥 농가별 엑셀:</b></label>
@@ -290,6 +323,31 @@
     // 엽장 차트 그리기
     // ============================================================
 
+
+    // 농가별 고정 색상 팔레트: 같은 농가는 모든 막대그래프에서 같은 색상 사용
+    const farmColorPalette = [
+      'rgba(54, 162, 235, 0.78)',
+      'rgba(46, 204, 113, 0.78)',
+      'rgba(153, 102, 255, 0.78)',
+      'rgba(255, 99, 132, 0.78)',
+      'rgba(255, 205, 86, 0.82)',
+      'rgba(75, 192, 192, 0.78)',
+      'rgba(201, 203, 207, 0.88)',
+      'rgba(255, 159, 64, 0.78)',
+      'rgba(100, 149, 237, 0.82)',
+      'rgba(60, 179, 113, 0.82)',
+      'rgba(218, 112, 214, 0.78)',
+      'rgba(205, 92, 92, 0.78)'
+    ];
+    const farmBorderPalette = farmColorPalette.map(c => c.replace(/0\.(?:78|82|88)\)/, '1)'));
+    const farmColorMap = new Map();
+    function getFarmColor(label, border = false) {
+      if (label === '전체 평균') return border ? 'rgba(230, 126, 34, 1)' : 'rgba(255, 159, 64, 0.88)';
+      if (!farmColorMap.has(label)) farmColorMap.set(label, farmColorMap.size % farmColorPalette.length);
+      const idx = farmColorMap.get(label);
+      return border ? farmBorderPalette[idx] : farmColorPalette[idx];
+    }
+
     function renderLeafLengthChart(labels, lengthData) {
 
       const ctx = document
@@ -316,9 +374,9 @@
 
             data: lengthData,
 
-            backgroundColor: 'rgba(54, 162, 235, 0.75)',
+            backgroundColor: labels.map(label => getFarmColor(label, false)),
 
-            borderColor: 'rgba(54, 162, 235, 1)',
+            borderColor: labels.map(label => getFarmColor(label, true)),
 
             borderWidth: 1,
 
@@ -422,9 +480,9 @@
 
             data: leafData,
 
-            backgroundColor: 'rgba(46, 204, 113, 0.75)',
+            backgroundColor: labels.map(label => getFarmColor(label, false)),
 
-            borderColor: 'rgba(46, 204, 113, 1)',
+            borderColor: labels.map(label => getFarmColor(label, true)),
 
             borderWidth: 1,
 
@@ -873,16 +931,25 @@
         );
 
 
-      // 차트 호출
+      // 차트 호출: 농가별 값 오른쪽에 전체 농가 평균 막대 추가
+      const chartLabels = [...farms, '전체 평균'];
+
+      const leafLengthOverallAvg = avgLeafLength.length
+        ? (avgLeafLength.reduce((sum, v) => sum + Number(v), 0) / avgLeafLength.length).toFixed(1)
+        : 0;
+
+      const leavesOverallAvg = avgLeaves.length
+        ? (avgLeaves.reduce((sum, v) => sum + Number(v), 0) / avgLeaves.length).toFixed(1)
+        : 0;
+
       renderLeafLengthChart(
-        farms,
-        avgLeafLength
+        chartLabels,
+        [...avgLeafLength, leafLengthOverallAvg]
       );
 
-
       renderLeafChart(
-        farms,
-        avgLeaves
+        chartLabels,
+        [...avgLeaves, leavesOverallAvg]
       );
 
     }
