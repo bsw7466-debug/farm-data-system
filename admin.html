@@ -113,6 +113,7 @@
     .filter-item { background:#f7faf8; border:1px solid var(--line); border-radius:12px; padding:9px 12px; }
     select { border:0; border-left:1px solid #dde6e0; border-radius:0; background:transparent; outline:none; font-size:14px; color:#24362a; }
     .chart-title { font-size:19px; color:#203429; }
+    .chart-period { margin:0 0 16px; font-size:26px; font-weight:900; color:#203429; letter-spacing:-.04em; text-align:center; line-height:1.25; }
     .compare-card { border-top:0; position:relative; overflow:hidden; }
     .compare-card::before { content:""; position:absolute; left:0; top:0; bottom:0; width:5px; background:var(--green2); }
     .compare-chip { background:#f5f9f6; border-color:#dce9e0; border-radius:10px; }
@@ -222,6 +223,7 @@
 
   <!-- 1. 엽장 비교 그래프 -->
   <div class="card">
+    <div class="chart-period">전체 기간 생육지표</div>
     <div class="chart-title"><span><span class="section-kicker">GROWTH ANALYSIS</span><br>농가별 평균 엽장 비교 (cm)</span></div>
     <div class="chart-container">
       <canvas id="leafLengthChart"></canvas>
@@ -232,6 +234,7 @@
 
   <!-- 2. 엽수 비교 그래프 -->
   <div class="card">
+    <div class="chart-period">전체 기간 생육지표</div>
     <div class="chart-title"><span><span class="section-kicker">LEAF ANALYSIS</span><br>농가별 평균 총 엽수 비교 (외엽+내엽, 개)</span></div>
     <div class="chart-container">
       <canvas id="leafChart"></canvas>
@@ -242,6 +245,7 @@
 
   <!-- 수확조사 구중 비교 그래프 -->
   <div class="card" id="harvestThirdCard" style="display:none;">
+    <div class="chart-period">전체 기간 수확지표</div>
     <div class="chart-title"><span><span class="section-kicker">HARVEST ANALYSIS</span><br><span id="harvestThirdTitle">농가별 평균 구중 비교 (g)</span></span></div>
     <div class="chart-container"><canvas id="harvestThirdChart"></canvas></div>
   </div>
@@ -750,6 +754,26 @@
       btn.addEventListener('click', () => applyDashboardMode(btn.dataset.view));
     });
 
+    function getSelectedPeriodLabel() {
+      const monthValue = document.getElementById('surveyMonth').value;
+      const tenValue = document.getElementById('surveyTenDay').value;
+      const selectedType = document.getElementById('viewType').value;
+      const tenLabels = { early: '상순', mid: '중순', late: '하순' };
+      const indicator = selectedType === '수확' ? '수확지표' : '생육지표';
+
+      if (monthValue === 'all' && tenValue === 'all') return `전체 기간 ${indicator}`;
+      if (monthValue === 'all') return `전체 월 ${tenLabels[tenValue] || ''} ${indicator}`.replace(/\s+/g, ' ').trim();
+      if (tenValue === 'all') return `${monthValue}월 전체 ${indicator}`;
+      return `${monthValue}월 ${tenLabels[tenValue]} ${indicator}`;
+    }
+
+    function updateChartPeriodLabels() {
+      const label = getSelectedPeriodLabel();
+      document.querySelectorAll('.chart-period').forEach(el => {
+        el.textContent = label;
+      });
+    }
+
     function updateDashboard() {
 
       const selectedType =
@@ -761,6 +785,7 @@
       const selectedTenDay =
         document.getElementById('surveyTenDay').value;
 
+      updateChartPeriodLabels();
 
       const filteredData = rawDataList.filter(item => {
 
@@ -1278,6 +1303,22 @@
 
       });
 
+
+    // ============================================================
+    // 메인 화면 기본 기간: 오늘 날짜 기준 월 + 상/중/하순 자동 선택
+    // 사용자가 이후 필터를 직접 변경하면 선택한 기간이 그대로 적용됨
+    // ============================================================
+    function setCurrentPeriodAsDefault() {
+      const today = new Date();
+      const month = today.getMonth() + 1;
+      const day = today.getDate();
+      const tenDay = day <= 10 ? 'early' : (day <= 20 ? 'mid' : 'late');
+
+      document.getElementById('surveyMonth').value = String(month);
+      document.getElementById('surveyTenDay').value = tenDay;
+    }
+
+    setCurrentPeriodAsDefault();
 
     // ============================================================
     // 필터 변경 이벤트 리스너 연결
